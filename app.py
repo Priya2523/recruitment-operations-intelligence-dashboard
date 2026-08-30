@@ -1,7 +1,5 @@
 # ================================================================
 # RECRUITMENT INTELLIGENCE DASHBOARD
-
-
 # ================================================================
 
 print("=" * 70)
@@ -47,7 +45,8 @@ def mask_client(value):
 
 
 def _empty_chart(message):
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    fig.patch.set_alpha(0)
     ax.axis("off")
     ax.text(
         0.5, 0.5, message,
@@ -213,7 +212,106 @@ def load_uploaded_file(file):
 
 
 # ============================================================
-# 5. RECRUITMENT ANALYSIS
+# 5. VISUAL STYLE HELPERS (colors, KPI cards, donut charts, badges)
+# ============================================================
+
+MATCH_COLORS = {"HIGH": "#16a34a", "MEDIUM": "#3b82f6", "LOW": "#f59e0b", "NO MATCH": "#9ca3af"}
+RISK_COLORS = {"HIGH": "#dc2626", "MEDIUM": "#f59e0b", "LOW": "#16a34a", "UNKNOWN": "#9ca3af"}
+PRIORITY_COLORS = {
+    "P1 - IMMEDIATE REVIEW": "#dc2626",
+    "P2 - HIGH PRIORITY": "#f59e0b",
+    "P3 - REVIEW": "#3b82f6",
+    "P4 - LOW / NO PRIORITY": "#9ca3af",
+}
+DONUT_PALETTE = ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#94a3b8"]
+
+BADGE_COLORS = {
+    "HIGH": ("#b91c1c", "#fee2e2"),
+    "MEDIUM": ("#b45309", "#fef3c7"),
+    "LOW": ("#15803d", "#dcfce7"),
+    "NO MATCH": ("#4b5563", "#f3f4f6"),
+    "UNKNOWN": ("#4b5563", "#f3f4f6"),
+    "P1 - IMMEDIATE REVIEW": ("#b91c1c", "#fee2e2"),
+    "P2 - HIGH PRIORITY": ("#b45309", "#fef3c7"),
+    "P3 - REVIEW": ("#1d4ed8", "#dbeafe"),
+    "P4 - LOW / NO PRIORITY": ("#4b5563", "#f3f4f6"),
+}
+
+
+def make_badge(value):
+    if pd.isna(value) or str(value).strip() == "":
+        return ""
+    key = str(value).upper().strip()
+    fg, bg = BADGE_COLORS.get(key, ("#374151", "#f3f4f6"))
+    return (
+        f'<span style="background:{bg};color:{fg};padding:3px 10px;'
+        f'border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;">'
+        f'{value}</span>'
+    )
+
+
+def kpi_card(label, value, color):
+    return f"""
+    <div style="background:white;border-radius:14px;padding:16px 18px;
+                box-shadow:0 1px 4px rgba(0,0,0,0.08);border-top:4px solid {color};
+                flex:1;min-width:150px;">
+      <div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;
+                  letter-spacing:0.04em;">{label}</div>
+      <div style="font-size:26px;font-weight:800;color:#111827;margin-top:6px;">{value}</div>
+    </div>
+    """
+
+
+def kpi_grid(cards):
+    return f'<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 18px 0;">{"".join(cards)}</div>'
+
+
+def insight_box(text):
+    if not text:
+        return ""
+    return f"""
+    <div style="background:#eef2ff;border-left:4px solid #4f46e5;border-radius:8px;
+                padding:12px 16px;margin:10px 0 4px 0;color:#312e81;font-size:14px;line-height:1.5;">
+      {text}
+    </div>
+    """
+
+
+def donut_chart(labels, values, title, color_map=None):
+    if not values or sum(values) == 0:
+        return _empty_chart(f"No data available for {title}.")
+
+    if color_map:
+        colors = [color_map.get(str(l).upper().strip(), DONUT_PALETTE[i % len(DONUT_PALETTE)])
+                  for i, l in enumerate(labels)]
+    else:
+        colors = [DONUT_PALETTE[i % len(DONUT_PALETTE)] for i in range(len(labels))]
+
+    total = sum(values)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.patch.set_alpha(0)
+    wedges, _texts, autotexts = ax.pie(
+        values,
+        labels=None,
+        autopct=lambda p: f"{p:.0f}%" if p >= 4 else "",
+        startangle=90,
+        colors=colors,
+        pctdistance=0.78,
+        wedgeprops=dict(width=0.42, edgecolor="white", linewidth=2),
+    )
+    plt.setp(autotexts, size=11, weight="bold", color="white")
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=14)
+    ax.text(0, 0, f"{total:,}\ntotal", ha="center", va="center", fontsize=13, fontweight="bold", color="#111827")
+    ax.legend(
+        wedges, [f"{l} ({v:,})" for l, v in zip(labels, values)],
+        loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=2, frameon=False, fontsize=9
+    )
+    plt.tight_layout()
+    return fig
+
+
+# ============================================================
+# 6. RECRUITMENT ANALYSIS
 # ============================================================
 
 def analyze_recruitment(file, job_description=None):
@@ -222,19 +320,21 @@ def analyze_recruitment(file, job_description=None):
 
     if df is None:
         blank_chart = _empty_chart(message)
+        empty_reco = gr.update(value=pd.DataFrame(), datatype=None)
         return (
             message,
-            0, 0, 0, 0,
-            0, 0, 0, 0,
-            pd.DataFrame(),
-            blank_chart,
-            pd.DataFrame(),
-            pd.DataFrame(),
-            blank_chart,
-            pd.DataFrame(),
-            blank_chart,
-            pd.DataFrame(),
-            pd.DataFrame()
+            kpi_grid([kpi_card(l, 0, c) for l, c in [
+                ("Recruitment Records", "#4f46e5"), ("Unique Candidates", "#4f46e5"),
+                ("Unique Roles", "#4f46e5"), ("Reusable Candidates", "#10b981")]]),
+            kpi_grid([kpi_card(l, 0, c) for l, c in [
+                ("Candidate-Role Matches", "#4f46e5"), ("HIGH Matches", "#10b981"),
+                ("High-Priority Matches", "#f59e0b"), ("High Joining-Risk Rows", "#dc2626")]]),
+            pd.DataFrame(), blank_chart, blank_chart, "",
+            pd.DataFrame(), "",
+            pd.DataFrame(), blank_chart, "",
+            pd.DataFrame(), blank_chart, "",
+            pd.DataFrame(), blank_chart, "",
+            empty_reco,
         )
 
     claimed_columns = set()
@@ -262,7 +362,7 @@ def analyze_recruitment(file, job_description=None):
     status_col = detect_column(df, STATUS_ALIASES)
 
     # ========================================================
-    # 6. BASIC KPIs
+    # BASIC KPIs
     # ========================================================
 
     total_records = len(df)
@@ -281,10 +381,10 @@ def analyze_recruitment(file, job_description=None):
     if candidate_col and role_col:
         temp = df[[candidate_col, role_col]].dropna()
         reusable_counts = temp.groupby(candidate_col)[role_col].nunique()
-        reusable_candidates = (reusable_counts > 1).sum()
+        reusable_candidates = int((reusable_counts > 1).sum())
 
     # ========================================================
-    # 7. MATCH ANALYSIS (pipeline column OR generic JD match)
+    # MATCH ANALYSIS (pipeline column OR generic JD match)
     # ========================================================
 
     match_count = 0
@@ -302,45 +402,45 @@ def analyze_recruitment(file, job_description=None):
         levels = df[match_level_col].fillna("NO MATCH").astype(str).str.upper().str.strip()
         match_count = len(df)
         match_summary = levels.value_counts().rename_axis("Match Level").reset_index(name="Matches")
-        high_matches = (levels == "HIGH").sum()
+        high_matches = int((levels == "HIGH").sum())
     elif role_col and job_description:
-        # GENERIC FALLBACK: score every candidate's role against the pasted JD
         computed = df[role_col].apply(lambda r: generic_role_match(r, job_description))
         computed_match_levels = computed.apply(lambda x: x[1] if x[1] else "NO MATCH")
         match_count = len(df)
         match_summary = computed_match_levels.value_counts().rename_axis("Match Level").reset_index(name="Matches")
-        high_matches = (computed_match_levels == "HIGH").sum()
+        high_matches = int((computed_match_levels == "HIGH").sum())
 
     # ========================================================
-    # 8. PRIORITY ANALYSIS
+    # PRIORITY ANALYSIS
     # ========================================================
 
     if priority_col:
         priorities = df[priority_col].fillna("P4 - LOW / NO PRIORITY").astype(str).str.upper().str.strip()
         priority_summary = priorities.value_counts().rename_axis("Priority Category").reset_index(name="Matches")
-        high_priority_matches = priorities.str.contains("P1|P2|HIGH", case=False, regex=True).sum()
+        high_priority_matches = int(priorities.str.contains("P1|P2|HIGH", case=False, regex=True).sum())
 
     # ========================================================
-    # 9. JOINING-RISK ANALYSIS (pipeline column OR generic heuristic)
+    # JOINING-RISK ANALYSIS (pipeline column OR generic heuristic)
     # ========================================================
 
     if risk_level_col:
         risk_levels = df[risk_level_col].fillna("UNKNOWN").astype(str).str.upper().str.strip()
         risk_summary = risk_levels.value_counts().rename_axis("Joining Risk Level").reset_index(name="Candidate-Role Rows")
-        high_risk_matches = (risk_levels == "HIGH").sum()
+        high_risk_matches = int((risk_levels == "HIGH").sum())
     elif notice_col or status_col:
-        # GENERIC FALLBACK — computes risk from whatever raw fields exist
         computed = df.apply(lambda row: generic_risk_score(row, notice_col, status_col), axis=1)
         risk_levels = computed.apply(lambda x: x[1])
         risk_summary = risk_levels.value_counts().rename_axis("Joining Risk Level").reset_index(name="Candidate-Role Rows")
-        high_risk_matches = (risk_levels == "HIGH").sum()
+        high_risk_matches = int((risk_levels == "HIGH").sum())
 
     # ========================================================
-    # 10. BUSINESS GROUP ANALYSIS
+    # BUSINESS GROUP ANALYSIS
     # ========================================================
 
     business_summary = pd.DataFrame(columns=["Business Group", "Candidate Records"])
-    business_plot = None
+    business_bar = None
+    business_donut = None
+    business_insight = ""
 
     if business_col:
         business_data = df.copy()
@@ -350,68 +450,138 @@ def analyze_recruitment(file, job_description=None):
 
         chart_data = business_summary.head(10)
         fig, ax = plt.subplots(figsize=(9, 5))
-        ax.barh(chart_data["Business Group"][::-1], chart_data["Candidate Records"][::-1])
-        ax.set_title("Recruitment by Business Group")
+        fig.patch.set_alpha(0)
+        bars = ax.barh(chart_data["Business Group"][::-1], chart_data["Candidate Records"][::-1], color="#4f46e5")
+        ax.set_title("Recruitment by Business Group (ranked)", fontsize=13, fontweight="bold")
         ax.set_xlabel("Candidate Records")
+        ax.spines[["top", "right"]].set_visible(False)
+        for bar in bars:
+            ax.text(bar.get_width() + max(chart_data["Candidate Records"]) * 0.01,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{int(bar.get_width()):,}", va="center", fontsize=9, color="#374151")
         plt.tight_layout()
-        business_plot = fig
+        business_bar = fig
+
+        # Donut: top 5 groups + "Other"
+        top5 = business_summary.head(5).copy()
+        other_total = business_summary["Candidate Records"].iloc[5:].sum()
+        labels = top5["Business Group"].tolist()
+        values = top5["Candidate Records"].tolist()
+        if other_total > 0:
+            labels.append("Other")
+            values.append(int(other_total))
+        business_donut = donut_chart(labels, values, "Share of Recruitment by Business Group")
+
+        top_row = business_summary.iloc[0]
+        total_biz = business_summary["Candidate Records"].sum()
+        pct = top_row["Candidate Records"] / total_biz * 100 if total_biz else 0
+        business_insight = insight_box(
+            f"📌 <b>{top_row['Business Group']}</b> drives <b>{pct:.0f}%</b> of all recruitment activity "
+            f"({top_row['Candidate Records']:,} of {total_biz:,} records) — the single biggest hiring demand center."
+        )
     else:
-        business_plot = _empty_chart("No client/business column found in this file.")
+        business_bar = _empty_chart("No client/business column found in this file.")
+        business_donut = _empty_chart("No client/business column found in this file.")
 
     # ========================================================
-    # 11. TOP ROLES
+    # TOP ROLES
     # ========================================================
 
     role_summary = pd.DataFrame(columns=["Role", "Candidate Records"])
+    role_insight = ""
     if role_col:
         role_summary = df[role_col].fillna("Unknown").astype(str).str.strip().value_counts().head(10).reset_index()
         role_summary.columns = ["Role", "Candidate Records"]
+        if not role_summary.empty:
+            role_insight = insight_box(
+                f"📌 The role <b>{role_summary.iloc[0]['Role']}</b> has the highest recruitment activity "
+                f"with <b>{role_summary.iloc[0]['Candidate Records']:,}</b> candidate records — "
+                f"a good indicator of where hiring pressure is greatest right now."
+            )
 
     # ========================================================
-    # 12. MATCH QUALITY CHART
+    # MATCH QUALITY DONUT
     # ========================================================
 
-    match_plot = None
+    match_donut = None
+    match_insight = ""
     if not match_summary.empty:
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.bar(match_summary["Match Level"], match_summary["Matches"])
-        ax.set_title("Candidate-Role Match Quality")
-        ax.set_ylabel("Matches")
-        plt.xticks(rotation=20)
-        plt.tight_layout()
-        match_plot = fig
+        match_donut = donut_chart(
+            match_summary["Match Level"].tolist(),
+            match_summary["Matches"].tolist(),
+            "Candidate-Role Match Quality",
+            color_map=MATCH_COLORS,
+        )
+        total_m = match_summary["Matches"].sum()
+        pct_high = high_matches / total_m * 100 if total_m else 0
+        match_insight = insight_box(
+            f"📌 Only <b>{pct_high:.1f}%</b> of candidate-role pairs are <b>HIGH</b>-quality matches "
+            f"({high_matches:,} of {total_m:,}). Recruiters should prioritize outreach on these first "
+            f"before working through MEDIUM/LOW matches."
+        )
     else:
-        match_plot = _empty_chart(
+        match_donut = _empty_chart(
             "No match_level column found, and no Job Description provided.\n"
             "Paste a JD above to enable match scoring on this file."
         )
 
     # ========================================================
-    # 13. JOINING-RISK CHART
+    # JOINING-RISK DONUT
     # ========================================================
 
-    risk_plot = None
+    risk_donut = None
+    risk_insight = ""
     if not risk_summary.empty:
         order = ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
         risk_summary["Joining Risk Level"] = pd.Categorical(risk_summary["Joining Risk Level"], categories=order, ordered=True)
         risk_summary = risk_summary.sort_values("Joining Risk Level")
+        risk_summary["Joining Risk Level"] = risk_summary["Joining Risk Level"].astype(str)
 
-        fig, ax = plt.subplots(figsize=(8, 5))
-        colors = {"HIGH": "#dc2626", "MEDIUM": "#f59e0b", "LOW": "#16a34a", "UNKNOWN": "#94a3b8"}
-        bar_colors = [colors.get(str(lvl), "#94a3b8") for lvl in risk_summary["Joining Risk Level"]]
-        ax.bar(risk_summary["Joining Risk Level"].astype(str), risk_summary["Candidate-Role Rows"], color=bar_colors)
-        ax.set_title("Joining-Risk Distribution")
-        ax.set_ylabel("Candidate-Role Rows")
-        plt.tight_layout()
-        risk_plot = fig
+        risk_donut = donut_chart(
+            risk_summary["Joining Risk Level"].tolist(),
+            risk_summary["Candidate-Role Rows"].tolist(),
+            "Joining-Risk Distribution",
+            color_map=RISK_COLORS,
+        )
+        total_r = risk_summary["Candidate-Role Rows"].sum()
+        pct_high_risk = high_risk_matches / total_r * 100 if total_r else 0
+        risk_insight = insight_box(
+            f"📌 <b>{pct_high_risk:.1f}%</b> of candidates ({high_risk_matches:,} of {total_r:,}) fall into "
+            f"<b>HIGH</b> joining-risk. Proactive follow-up with this group reduces last-minute drop-offs "
+            f"before joining date."
+        )
     else:
-        risk_plot = _empty_chart(
+        risk_donut = _empty_chart(
             "No joining_risk_level column, and no notice-period/status field found\n"
             "in this file to compute risk from."
         )
 
     # ========================================================
-    # 14. CANDIDATE RECOMMENDATIONS
+    # PRIORITY DONUT
+    # ========================================================
+
+    priority_donut = None
+    priority_insight = ""
+    if not priority_summary.empty:
+        priority_donut = donut_chart(
+            priority_summary["Priority Category"].tolist(),
+            priority_summary["Matches"].tolist(),
+            "Recruiter Priority Split",
+            color_map=PRIORITY_COLORS,
+        )
+        total_p = priority_summary["Matches"].sum()
+        p1_row = priority_summary[priority_summary["Priority Category"].str.contains("P1", na=False)]
+        p1_count = int(p1_row["Matches"].sum())
+        pct_p1 = p1_count / total_p * 100 if total_p else 0
+        priority_insight = insight_box(
+            f"📌 <b>{p1_count:,} candidates ({pct_p1:.1f}%)</b> are flagged <b>P1 - Immediate Review</b>. "
+            f"Clearing this queue first prevents strong candidates from going cold while waiting on recruiters."
+        )
+    else:
+        priority_donut = _empty_chart("No priority_category column found in this file.")
+
+    # ========================================================
+    # CANDIDATE RECOMMENDATIONS
     # ========================================================
 
     match_score_col = detect_column(df, MATCH_SCORE_ALIASES)
@@ -440,6 +610,8 @@ def analyze_recruitment(file, job_description=None):
         if not (pair[0] in seen_cols or seen_cols.add(pair[0]))
     ]
 
+    badge_columns = {"Match Level", "Joining Risk Level", "Priority"}
+
     if rec_column_map:
         source_cols = [c for c, _ in rec_column_map]
         recommendations = df[source_cols].copy()
@@ -451,21 +623,32 @@ def analyze_recruitment(file, job_description=None):
                 recommendations[c] = pd.to_numeric(recommendations[c], errors="coerce")
             recommendations = recommendations.sort_values(sort_cols, ascending=False, na_position="last")
 
-        recommendations = recommendations.head(50)
+        recommendations = recommendations.head(50).reset_index(drop=True)
+
+        datatype = []
+        for col in recommendations.columns:
+            if col in badge_columns:
+                recommendations[col] = recommendations[col].apply(make_badge)
+                datatype.append("markdown")
+            else:
+                datatype.append("number" if pd.api.types.is_numeric_dtype(recommendations[col]) else "str")
+
     elif candidate_col and computed_match_levels is not None:
-        # GENERIC FALLBACK recommendation table, built from the JD match
         recommendations = pd.DataFrame({
             "Candidate": df[candidate_col],
             "Target Role": df[role_col] if role_col else "Unknown",
             "Match Level (vs pasted JD)": computed_match_levels
-        }).sort_values("Match Level (vs pasted JD)", ascending=False).head(50)
+        }).sort_values("Match Level (vs pasted JD)", ascending=False).head(50).reset_index(drop=True)
+        recommendations["Match Level (vs pasted JD)"] = recommendations["Match Level (vs pasted JD)"].apply(make_badge)
+        datatype = ["str", "str", "markdown"]
     else:
         recommendations = pd.DataFrame({
             "Message": ["Candidate recommendation fields were not found in the uploaded file."]
         })
+        datatype = ["str"]
 
     # ========================================================
-    # 15. STATUS MESSAGE
+    # STATUS MESSAGE
     # ========================================================
 
     detected = []
@@ -506,109 +689,163 @@ def analyze_recruitment(file, job_description=None):
         missing_notes.append("No joining_risk_level column and no notice-period/status field found -> Joining-Risk Overview will be empty.")
 
     status_lines = [
-        "Analysis completed successfully.",
+        "✅ **Analysis completed successfully.**",
         "",
-        f"Records processed: {total_records:,}",
-        f"Columns detected: {', '.join(detected) if detected else 'Basic dataset only'}",
+        f"**Records processed:** {total_records:,}",
+        f"**Columns detected:** {', '.join(detected) if detected else 'Basic dataset only'}",
     ]
 
     if missing_notes:
         status_lines.append("")
-        status_lines.append("Notes on this file (not errors -- just what could not be found):")
+        status_lines.append("_Notes on this file (not errors — just what could not be found):_")
         for note in missing_notes:
             status_lines.append(f"- {note}")
 
     status_message = "\n".join(status_lines)
 
+    overview_kpi_html = kpi_grid([
+        kpi_card("Recruitment Records", f"{total_records:,}", "#4f46e5"),
+        kpi_card("Unique Candidates", f"{unique_candidates:,}", "#4f46e5"),
+        kpi_card("Unique Roles", f"{unique_roles:,}", "#4f46e5"),
+        kpi_card("Reusable Candidates", f"{reusable_candidates:,}", "#10b981"),
+    ])
+
+    matching_kpi_html = kpi_grid([
+        kpi_card("Candidate-Role Matches", f"{match_count:,}", "#4f46e5"),
+        kpi_card("HIGH Matches", f"{high_matches:,}", "#10b981"),
+        kpi_card("High-Priority Matches", f"{high_priority_matches:,}", "#f59e0b"),
+        kpi_card("High Joining-Risk Rows", f"{high_risk_matches:,}", "#dc2626"),
+    ])
+
+    overview_insight = insight_box(
+        f"📌 <b>{reusable_candidates:,}</b> of {unique_candidates:,} unique candidates "
+        f"({(reusable_candidates/unique_candidates*100) if unique_candidates else 0:.0f}%) already match more "
+        f"than one role — a ready-made talent pool that needs no fresh sourcing."
+    ) if unique_candidates else ""
+
     return (
         status_message,
-        total_records, unique_candidates, unique_roles, reusable_candidates,
-        match_count, high_matches, high_priority_matches, high_risk_matches,
-        business_summary, business_plot,
-        role_summary,
-        match_summary, match_plot,
-        risk_summary, risk_plot,
-        priority_summary,
-        recommendations
+        overview_kpi_html,
+        matching_kpi_html,
+        business_summary, business_bar, business_donut, business_insight,
+        role_summary, role_insight,
+        match_summary, match_donut, match_insight,
+        risk_summary, risk_donut, risk_insight,
+        priority_summary, priority_donut, priority_insight,
+        gr.update(value=recommendations, datatype=datatype),
     )
 
 
 # ============================================================
-# 16. GRADIO UI
+# 7. GRADIO UI
 # ============================================================
 
-with gr.Blocks(title="Recruitment Intelligence Dashboard", theme=gr.themes.Soft()) as demo:
+CUSTOM_CSS = """
+.gradio-container {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
+    max-width: 1200px !important;
+    margin: auto !important;
+}
+#header-block {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 18px;
+    color: white !important;
+}
+#header-block h1, #header-block p { color: white !important; }
+.section-title {
+    font-size: 20px !important;
+    font-weight: 800 !important;
+    margin-top: 22px !important;
+    margin-bottom: 4px !important;
+    color: #111827 !important;
+}
+"""
 
-    gr.Markdown("""
-    # Recruitment Intelligence Dashboard
+with gr.Blocks(title="Recruitment Intelligence Dashboard", theme=gr.themes.Soft(primary_hue="indigo"), css=CUSTOM_CSS) as demo:
 
-    **Analyze recruitment data, candidate-role matching, recruiter priorities
-    and joining-risk from an uploaded CSV or XLSX file.**
-
-    Works on files already processed by the full pipeline, and on
-    brand-new recruiter trackers it has never seen before.
+    gr.HTML("""
+    <div id="header-block">
+      <h1 style="margin:0;font-size:26px;">📊 Recruitment Intelligence Dashboard</h1>
+      <p style="margin:8px 0 0 0;font-size:15px;opacity:0.95;">
+        Analyze recruitment data, candidate-role matching, recruiter priorities and joining-risk
+        from an uploaded CSV or XLSX file — works on processed pipeline files and brand-new
+        recruiter trackers alike.
+      </p>
+    </div>
     """)
 
     with gr.Row():
-        file_input = gr.File(label="Upload Recruitment Data", file_types=[".csv", ".xlsx", ".xls"], type="filepath")
+        file_input = gr.File(label="📁 Upload Recruitment Data", file_types=[".csv", ".xlsx", ".xls"], type="filepath")
         jd_input = gr.Textbox(
-            label="Job Description (optional — enables Match scoring on unseen files)",
+            label="📝 Job Description (optional — enables Match scoring on unseen files)",
             lines=3,
             placeholder="Paste the role/JD here to score candidates against it..."
         )
 
-    analyze_button = gr.Button("Analyze Recruitment Data", variant="primary")
+    analyze_button = gr.Button("🔍 Analyze Recruitment Data", variant="primary", size="lg")
 
     status_box = gr.Markdown("Upload a recruitment CSV/XLSX file and click **Analyze Recruitment Data**.")
 
-    gr.Markdown("## Recruitment Overview")
-    with gr.Row():
-        kpi1 = gr.Number(label="Recruitment Records", value=0, interactive=False)
-        kpi2 = gr.Number(label="Unique Candidates", value=0, interactive=False)
-        kpi3 = gr.Number(label="Unique Roles", value=0, interactive=False)
-        kpi4 = gr.Number(label="Reusable Candidates", value=0, interactive=False)
+    with gr.Tabs():
 
-    gr.Markdown("## Candidate-Role Matching")
-    with gr.Row():
-        kpi5 = gr.Number(label="Candidate-Role Matches", value=0, interactive=False)
-        kpi6 = gr.Number(label="HIGH Matches", value=0, interactive=False)
-        kpi7 = gr.Number(label="High-Priority Matches", value=0, interactive=False)
-        kpi8 = gr.Number(label="High Joining-Risk Rows", value=0, interactive=False)
+        with gr.Tab("📈 Overview"):
+            gr.Markdown("### Recruitment Overview", elem_classes="section-title")
+            overview_kpis = gr.HTML()
+            overview_insight_html = gr.HTML()
 
-    gr.Markdown("## Recruitment by Business Group")
-    business_table = gr.Dataframe(headers=["Business Group", "Candidate Records"], interactive=False)
-    business_plot_component = gr.Plot()
+            gr.Markdown("### Recruitment by Business Group", elem_classes="section-title")
+            with gr.Row():
+                with gr.Column(scale=1):
+                    business_donut_plot = gr.Plot(label="Share by Business Group")
+                with gr.Column(scale=1):
+                    business_bar_plot = gr.Plot(label="Ranked by Volume")
+            business_insight_html = gr.HTML()
+            business_table = gr.Dataframe(headers=["Business Group", "Candidate Records"], interactive=False)
 
-    gr.Markdown("## Top Recruitment Roles")
-    role_table = gr.Dataframe(headers=["Role", "Candidate Records"], interactive=False)
+            gr.Markdown("### Top Recruitment Roles", elem_classes="section-title")
+            role_insight_html = gr.HTML()
+            role_table = gr.Dataframe(headers=["Role", "Candidate Records"], interactive=False)
 
-    gr.Markdown("## Match Quality")
-    match_table = gr.Dataframe(headers=["Match Level", "Matches"], interactive=False)
-    match_plot_component = gr.Plot()
+        with gr.Tab("🎯 Matching & Quality"):
+            gr.Markdown("### Candidate-Role Matching", elem_classes="section-title")
+            matching_kpis = gr.HTML()
 
-    gr.Markdown("## Joining-Risk Overview")
-    risk_table = gr.Dataframe(headers=["Joining Risk Level", "Candidate-Role Rows"], interactive=False)
-    risk_plot_component = gr.Plot()
+            gr.Markdown("### Match Quality", elem_classes="section-title")
+            match_plot_component = gr.Plot()
+            match_insight_html = gr.HTML()
+            match_table = gr.Dataframe(headers=["Match Level", "Matches"], interactive=False)
 
-    gr.Markdown("## Recruiter Prioritization")
-    priority_table = gr.Dataframe(headers=["Priority Category", "Matches"], interactive=False)
+        with gr.Tab("⚠️ Risk & Priority"):
+            gr.Markdown("### Joining-Risk Overview", elem_classes="section-title")
+            risk_plot_component = gr.Plot()
+            risk_insight_html = gr.HTML()
+            risk_table = gr.Dataframe(headers=["Joining Risk Level", "Candidate-Role Rows"], interactive=False)
 
-    gr.Markdown("## Top Candidate Recommendations")
-    recommendation_table = gr.Dataframe(interactive=False)
+            gr.Markdown("### Recruiter Prioritization", elem_classes="section-title")
+            priority_plot_component = gr.Plot()
+            priority_insight_html = gr.HTML()
+            priority_table = gr.Dataframe(headers=["Priority Category", "Matches"], interactive=False)
+
+        with gr.Tab("🏆 Recommendations"):
+            gr.Markdown("### Top Candidate Recommendations", elem_classes="section-title")
+            gr.Markdown("_Sorted by match score and joining-risk score, where available._")
+            recommendation_table = gr.Dataframe(interactive=False, wrap=True)
 
     analyze_button.click(
         fn=analyze_recruitment,
         inputs=[file_input, jd_input],
         outputs=[
             status_box,
-            kpi1, kpi2, kpi3, kpi4,
-            kpi5, kpi6, kpi7, kpi8,
-            business_table, business_plot_component,
-            role_table,
-            match_table, match_plot_component,
-            risk_table, risk_plot_component,
-            priority_table,
-            recommendation_table
+            overview_kpis,
+            matching_kpis,
+            business_table, business_bar_plot, business_donut_plot, business_insight_html,
+            role_table, role_insight_html,
+            match_table, match_plot_component, match_insight_html,
+            risk_table, risk_plot_component, risk_insight_html,
+            priority_table, priority_plot_component, priority_insight_html,
+            recommendation_table,
         ]
     )
 
