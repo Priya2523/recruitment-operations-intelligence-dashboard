@@ -613,4 +613,4 @@ with gr.Blocks(title="Recruitment Intelligence Dashboard", theme=gr.themes.Soft(
     )
 
 print("\nLaunching Recruitment Intelligence Dashboard...")
-demo.launch()
+demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)), theme=gr.themes.Soft())
