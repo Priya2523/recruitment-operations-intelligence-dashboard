@@ -109,7 +109,7 @@ ANALYSIS    candidates)       anonymized business groups)
 - **Confidentiality by design.** Built a `CLIENT_MAP` masking layer so the public dashboard shows only anonymized business-group categories, never real client names — expanded from an initial 7-key map to the full 11-client set, and applied consistently across every downstream chart and table, including ones added after the initial build.
 - **Deployment portability.** Colab's port-forwarding proxy breaks Gradio's SSE/queue connection regardless of Gradio version — a known platform-level incompatibility, not a config issue. Validated the dashboard logic on AWS EC2 (works, but not cost-free long-term), then standardized on GitHub-connected Render deployment for a permanent, free, zero-maintenance host.
 - **Graceful degradation for unseen data.** The JD-matching module checks for a pre-computed `match_level` column first, computes similarity live against a pasted JD if absent, and states plainly when neither is available — so the dashboard never silently shows an empty or misleading chart.
-- **Non-technical usability.** Iterated from raw tables to donut charts, color-coded priority/risk badges, and auto-generated plain-language insight callouts under each chart, so a hiring manager reads the takeaway directly rather than interpreting a chart.
+
 
 ## 7. Results
 
@@ -120,15 +120,9 @@ On the working candidate pool (~15K candidate-role records, ~800 unique candidat
 - Roughly a quarter of candidates fall into **HIGH joining-risk** — the segment recruiters should prioritize for pre-offer follow-up.
 - **Technology & Business Consulting** is the largest single demand center by recruitment volume.
 
-*(Pull exact percentages from the live dashboard's KPI cards on your final dataset before publishing — the underlying counts are computed dynamically, not hardcoded, so they'll always reflect whatever file is loaded.)*
 
-## 8. Screenshots
 
-1. Landing screen — file upload + JD input box
-2. Overview tab — KPI cards, business-group donut, ranked bar chart
-3. Matching & Quality tab — match-quality donut with insight callouts
-4. Risk & Priority tab — joining-risk and recruiter-priority donuts
-5. Recommendations tab — color-coded HIGH/MEDIUM/P1 candidate table
+
    
 
 ## 9. Run Locally
