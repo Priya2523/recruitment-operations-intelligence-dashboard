@@ -514,11 +514,22 @@ def analyze_recruitment(file, job_description=None):
         )
         total_m = match_summary["Matches"].sum()
         pct_high = high_matches / total_m * 100 if total_m else 0
-        match_insight = insight_box(
+        no_match_row = match_summary[match_summary["Match Level"] == "NO MATCH"]
+        no_match_count = int(no_match_row["Matches"].sum())
+        pct_no_match = no_match_count / total_m * 100 if total_m else 0
+
+        insight_lines = [
             f"📌 Only <b>{pct_high:.1f}%</b> of candidate-role pairs are <b>HIGH</b>-quality matches "
             f"({high_matches:,} of {total_m:,}). Recruiters should prioritize outreach on these first "
             f"before working through MEDIUM/LOW matches."
-        )
+        ]
+        if no_match_count and pct_no_match >= 30:
+            insight_lines.append(
+                f"📌 <b>{pct_no_match:.0f}%</b> of records ({no_match_count:,}) show <b>NO MATCH</b> to the "
+                f"target role — this points to a sourcing/tagging gap (candidates not yet mapped to a role), "
+                f"not a candidate-quality problem."
+            )
+        match_insight = "".join(insight_box(line) for line in insight_lines)
     else:
         match_donut = _empty_chart(
             "No match_level column found, and no Job Description provided.\n"
@@ -624,6 +635,13 @@ def analyze_recruitment(file, job_description=None):
             recommendations = recommendations.sort_values(sort_cols, ascending=False, na_position="last")
 
         recommendations = recommendations.head(50).reset_index(drop=True)
+
+        if "Recommended Action" in recommendations.columns:
+            recommendations["Recommended Action"] = (
+                recommendations["Recommended Action"]
+                .astype(str)
+                .apply(lambda t: t if len(t) <= 55 else t[:52].rstrip() + "...")
+            )
 
         datatype = []
         for col in recommendations.columns:
